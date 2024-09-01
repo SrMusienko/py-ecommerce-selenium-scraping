@@ -10,6 +10,7 @@ from selenium.common import (
     NoSuchElementException
 )
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
@@ -52,32 +53,29 @@ def create_product(tag_product: Tag) -> Product:
     )
 
 
-def get_products_from_page(page_url: str) -> list[Product]:
-    option = webdriver.ChromeOptions()
-    option.add_argument("--headless")
-    service = Service(ChromeDriverManager().install())
-    with webdriver.Chrome(service=service, options=option) as driver:
-        try:
-            driver.get(page_url)
-            cookies = driver.find_elements(By.CLASS_NAME, "acceptCookies")
-            if cookies:
-                cookies[0].click()
-        except (NoSuchElementException, ElementClickInterceptedException) as e:
-            print(f"An error occurred while handling cookies: {e}")
+def get_products_from_page(page_url: str, driver: WebDriver) -> list[Product]:
 
-        try:
-            buttons = driver.find_elements(
-                By.CLASS_NAME,
-                "ecomerce-items-scroll-more"
-            )
-            while buttons and buttons[0].is_displayed():
-                buttons[0].click()
-                time.sleep(0.2)
-        except (NoSuchElementException, ElementClickInterceptedException) as e:
-            print(f"An error occurred while clicking load more buttons: {e}")
+    try:
+        driver.get(page_url)
+        cookies = driver.find_elements(By.CLASS_NAME, "acceptCookies")
+        if cookies:
+            cookies[0].click()
+    except (NoSuchElementException, ElementClickInterceptedException) as e:
+        print(f"An error occurred while handling cookies: {e}")
 
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        products = soup.select(".thumbnail")
+    try:
+        buttons = driver.find_elements(
+            By.CLASS_NAME,
+            "ecomerce-items-scroll-more"
+        )
+        while buttons and buttons[0].is_displayed():
+            buttons[0].click()
+            time.sleep(0.2)
+    except (NoSuchElementException, ElementClickInterceptedException) as e:
+        print(f"An error occurred while clicking load more buttons: {e}")
+
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    products = soup.select(".thumbnail")
 
     return [create_product(tag_product) for tag_product in products]
 
@@ -97,10 +95,14 @@ def save_data(file_path: str, products: list[Product]) -> None:
 
 
 def get_all_products() -> None:
-    for name, url in tqdm(URLS.items()):
-        products = get_products_from_page(url)
-        file_name = f"{name}.csv"
-        save_data(file_name, products)
+    option = webdriver.ChromeOptions()
+    option.add_argument("--headless")
+    service = Service(ChromeDriverManager().install())
+    with webdriver.Chrome(service=service, options=option) as driver:
+        for name, url in tqdm(URLS.items()):
+            products = get_products_from_page(url, driver)
+            file_name = f"{name}.csv"
+            save_data(file_name, products)
 
 
 if __name__ == "__main__":
